@@ -20,18 +20,20 @@ import (
 var (
 	kafkaWriter        *kafka.Writer
 	lastWriteTime      string
-	intervalDefault    time.Duration = 1
+	intervalDefault    time.Duration = 30
 	clickhouseQueryUrl               = ""
 	sql                              = ""
+	filterMap                        = map[string]struct{}{}
 )
 
 func init() {
-	//os.Setenv("KAFKA_ADDR", "172.31.39.179:19092")
-	//os.Setenv("KAFKA_USER", "admin")
-	//os.Setenv("KAFKA_PASSWORD", "Sw@123456")
-	//os.Setenv("KAFKA_TOPIC", "test1")
-	//os.Setenv("CLICKHOUSE_ADDR", "172.31.39.179:8123")
-	//os.Setenv("QUERY_SQL", "select ts,url,url_action,channel,id,udp,req,res from access_raw where ts > %s order by ts desc FORMAT JSON")
+	os.Setenv("KAFKA_ADDR", "172.31.39.179:19092")
+	os.Setenv("KAFKA_USER", "admin")
+	os.Setenv("KAFKA_PASSWORD", "Sw@123456")
+	os.Setenv("KAFKA_TOPIC", "test1")
+	os.Setenv("CLICKHOUSE_ADDR", "172.31.39.179:8123")
+	os.Setenv("QUERY_SQL", "select ts,url,url_action,channel,id,udp,req,res from access_raw where ts >= %s order by ts desc FORMAT JSON")
+	os.Setenv("WRITE_INTERVAL", "1")
 	// 初始化kafka写入端
 	kafkaAddr := os.Getenv("KAFKA_ADDR")
 	kafkaUser := os.Getenv("KAFKA_USER")
@@ -73,7 +75,7 @@ func init() {
 	log.Println("write interval:", tc)
 
 	// 获取clickhouse查询地址
-	clickhouseAddr := os.Getenv("CLICKHOUSE_QUERY_URL")
+	clickhouseAddr := os.Getenv("CLICKHOUSE_ADDR")
 	if clickhouseAddr == "" {
 		log.Fatal("clickhouseAddr must not be null")
 		return
@@ -125,19 +127,36 @@ func writeData(interval time.Duration) {
 		if data, ok := tmp.([]interface{}); ok {
 			msgs := make([]kafka.Message, len(data))
 			lastWriteTime = getTenMinutesAgoTimestamp(interval)
+			tmpFilterMap := map[string]struct{}{}
 			for idx := range data {
-				msgs[idx].Value, _ = json.Marshal(data[idx])
-				if idx == 0 {
-					var m map[string]interface{}
-					if err := json.Unmarshal(msgs[idx].Value, &m); err == nil {
-						if ts := m["ts"]; ts != nil {
-							if tmpTs, ok := ts.(string); ok {
+				tmpValue, _ := json.Marshal(data[idx])
+				var m map[string]interface{}
+				if err := json.Unmarshal(tmpValue, &m); err == nil {
+					tmpStr := ""
+					if ts := m["ts"]; ts != nil {
+						if tmpTs, ok := ts.(string); ok {
+							tmpStr = tmpTs
+							if idx == 0 {
 								lastWriteTime = tmpTs
 							}
 						}
 					}
+
+					// filter out repeat msg
+					if id := m["id"]; id != nil {
+						if tmpId, ok := id.(string); ok {
+							if _, exts := filterMap[tmpId]; exts {
+								continue
+							}
+							if lastWriteTime == tmpStr {
+								tmpFilterMap[tmpId] = struct{}{}
+							}
+						}
+					}
 				}
+				msgs[idx].Value = tmpValue
 			}
+			filterMap = tmpFilterMap
 			if err = kafkaWriter.WriteMessages(context.Background(), msgs...); err != nil {
 				log.Println("fail to write messages into kafka:", err)
 			} else {

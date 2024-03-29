@@ -2,15 +2,15 @@
 定时将clickhouse数据写入Kafka
 
 ### 环境变量配置说明
-| 环境变量名称          | 含义            |
-|-----------------|---------------|
-| KAFKA_ADDR      | Kafka地址       |
-| KAFKA_USER      | Kafka用户名      |
-| KAFKA_PASSWORD  | Kafka密码       |
-| KAFKA_TOPIC     | Kafka的topic   |
-| CLICKHOUSE_ADDR | click house地址 |
-| QUERY_SQL       | 查询的SQL        |
-| WRITE_INTERVAL  | 查询的时间间隔       |
+| 环境变量名称          | 含义           | 备注         |
+|-----------------|--------------|------------|
+| KAFKA_ADDR      | Kafka地址      |            |
+| KAFKA_USER      | Kafka用户名     |            |
+| KAFKA_PASSWORD  | Kafka密码      |            |
+| KAFKA_TOPIC     | Kafka的topic  |            |
+| CLICKHOUSE_ADDR | click house地址 |            |
+| QUERY_SQL       | 查询的SQL       | 必须按照时间降序排序 |
+| WRITE_INTERVAL  | 查询的时间间隔    |            |
 
 ### docker-compose
 ```azure
